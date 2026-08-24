@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     upgradeCost, heroStats, heroDps,
     enemyStats, enemyCount, roomClearReward,
-    isCritical, offlineGold, BASE_COST,
+    isCritical, offlineGold, BASE_COST, OFFLINE_CAP,
 } from '../src/logic';
 
 describe('upgradeCost (GDD: floor(50 * 1.15^L))', () => {
@@ -84,12 +84,28 @@ describe('isCritical (GDD: 5% chance)', () => {
     it('boundary 0.05 → no crit (strict <)', () => expect(isCritical(0.05)).toBe(false));
 });
 
-describe('offlineGold (Architecture: s*(dps/50)*5)', () => {
+describe('offlineGold (PRD: dps × depth × rate)', () => {
     it('zero time → zero gold', () => expect(offlineGold(0, 17)).toBe(0));
     it('zero dps → zero gold', () => expect(offlineGold(3600, 0)).toBe(0));
     it('negative input guarded', () => expect(offlineGold(-5, 10)).toBe(0));
-    it('one hour at dps 17', () =>
+    it('one hour at dps 17, depth 1, rate 1 = base formula', () =>
         expect(offlineGold(3600, 17)).toBe(Math.floor(3600 * (17 / 50) * 5)));
+    it('depth adds +10% per floor above 1', () => {
+        const base = Math.floor(3600 * (17 / 50) * 5);
+        expect(offlineGold(3600, 17, 1)).toBe(base);
+        expect(offlineGold(3600, 17, 4)).toBe(Math.floor(base * 1.3));
+        expect(offlineGold(3600, 17, 11)).toBe(Math.floor(base * 2));
+    });
+    it('offlineRate level adds +25% per level above 1', () => {
+        const base = offlineGold(3600, 17);
+        expect(offlineGold(3600, 17, 1, 2)).toBe(Math.floor(base * 1.25));
+        expect(offlineGold(3600, 17, 1, 3)).toBe(Math.floor(base * 1.5));
+    });
+    it('depth < 1 clamps to 1; level < 1 clamps to 1', () => {
+        const base = offlineGold(3600, 17);
+        expect(offlineGold(3600, 17, 0, 0)).toBe(base);
+        expect(offlineGold(3600, 17, -3, -2)).toBe(base);
+    });
     it('caps at OFFLINE_CAP', () =>
-        expect(offlineGold(365 * 24 * 3600, 500)).toBeLessThanOrEqual(99999));
+        expect(offlineGold(365 * 24 * 3600, 500)).toBeLessThanOrEqual(OFFLINE_CAP));
 });

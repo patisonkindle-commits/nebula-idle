@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { heroDps, offlineGold, type Upgrades } from './logic';
 
 /**
  * SaveData shape persisted to localStorage. Registry holds the same live data.
@@ -7,11 +8,7 @@ export interface SaveData {
     gold: number;
     highestDepth: number;
     lastLogin: number;
-    upgrades: {
-        attack: number;
-        health: number;
-        offlineRate: number;
-    };
+    upgrades: Upgrades;
 }
 
 const KEY = 'nebulaIdleSave';
@@ -32,9 +29,13 @@ export class DataManager {
         }
     }
 
-    /** Formula per architecture doc: seconds * (DPS / 50) * 5 */
-    static calculateOfflineProgress(saveTime: number, dps: number): number {
-        const secondsOffline = (Date.now() - saveTime) / 1000;
-        return Math.floor(secondsOffline * (dps / 50) * 5);
+    /**
+     * PRD §3: gains scale on DPS, deepest floor reached, and time away.
+     * offlineRate upgrade adds +25%/level above 1. Shared logic.offlineGold
+     * keeps formula unit-tested in one place.
+     */
+    static calculateOfflineProgress(saveTime: number, upgrades: Upgrades, highestDepth = 1): number {
+        const secondsOffline = Math.max(0, (Date.now() - saveTime) / 1000);
+        return offlineGold(secondsOffline, heroDps(upgrades), highestDepth, upgrades.offlineRate);
     }
 }

@@ -62,6 +62,16 @@ export class HubScene extends Phaser.Scene {
         this.createUpgradeRow(centerX, 850, 'Max HP', 'health');
         this.createUpgradeRow(centerX, 1100, 'Offline G/s', 'offlineRate');
 
+        // Autosave every 30s and on tab hide/close so lastLogin stays fresh
+        this.time.addEvent({ delay: 30000, loop: true, callback: () => DataManager.save(this.registry) });
+        this.game.events.on('visibilitychange', () => {
+            if (document.hidden) DataManager.save(this.registry);
+        });
+        this.events.once('shutdown', () => {
+            DataManager.save(this.registry);
+            this.game.events.off('visibilitychange');
+        });
+
         // Enter dungeon button
         const playBtn = this.add.image(centerX, 1600, 'ui-rpg', 'buttonLong_brown.png')
             .setInteractive()
@@ -100,9 +110,9 @@ export class HubScene extends Phaser.Scene {
             this.registry.set('highestDepth', save.highestDepth ?? 1);
             // Offline progress
             if (save.lastLogin) {
-                const dps = 10 * (save.upgrades.attack as number); // mirrors GameScene formula
-                const offlineGold = DataManager.calculateOfflineProgress(save.lastLogin, dps);
-                if (offlineGold > 0) this.registry.set('offlineGold', Math.min(offlineGold, 99999));
+                const earned = DataManager.calculateOfflineProgress(
+                    save.lastLogin, save.upgrades, save.highestDepth ?? 1);
+                if (earned > 0) this.registry.set('offlineGold', earned);
             }
         } else {
             this.registry.set('gold', 150);

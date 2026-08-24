@@ -61,10 +61,22 @@ export function isCritical(rnd: number): boolean {
     return rnd < CRIT_CHANCE;
 }
 
-// --- Offline progress (Architecture doc: seconds * (DPS/50) * 5) ---
+// --- Offline progress (PRD: based on DPS, deepest floor, time away) ---
 export const OFFLINE_CAP = 99999;
+/** Depth scaling: +10% earnings per deepest floor reached (softens early grind) */
+export const OFFLINE_DEPTH_MULT = 0.1;
 
-export function offlineGold(secondsOffline: number, dps: number): number {
+/**
+ * PRD §3: "Simulated gains based on DPS, deepest floor reached, and time away."
+ * offlineRate upgrade multiplies the result (1 level = ×1.0 baseline, each extra
+ * level +25%).
+ */
+export function offlineGold(secondsOffline: number, dps: number, depth = 1, offlineLevel = 1): number {
     if (!(secondsOffline > 0) || !(dps > 0)) return 0;
-    return Math.min(Math.floor(secondsOffline * (dps / 50) * 5), OFFLINE_CAP);
+    if (!(depth >= 1)) depth = 1;
+    if (!(offlineLevel >= 1)) offlineLevel = 1;
+    const base = secondsOffline * (dps / 50) * 5;
+    const depthMult = 1 + (depth - 1) * OFFLINE_DEPTH_MULT;
+    const rateMult = 1 + (offlineLevel - 1) * 0.25;
+    return Math.min(Math.floor(base * depthMult * rateMult), OFFLINE_CAP);
 }
