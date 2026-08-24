@@ -1,0 +1,161 @@
+import * as Phaser from 'phaser';
+import { DataManager } from '../DataManager';
+
+export class HubScene extends Phaser.Scene {
+    private goldText!: Phaser.GameObjects.Text;
+    private baseCost = 50;
+    private costMultiplier = 1.15;
+
+    constructor() {
+        super('HubScene');
+    }
+
+    create() {
+        const width = this.cameras.main.width;
+        const height = this.cameras.main.height;
+        const centerX = width / 2;
+
+        this.initializeRegistry();
+
+        // Background panel
+        const bg = this.add.image(centerX, height / 2, 'ui-rpg', 'panel_beige.png');
+        bg.setDisplaySize(1000, 1800);
+
+        this.add.text(centerX, 150, 'BASE CAMP', {
+            font: '64px monospace',
+            color: '#5c4033',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        this.goldText = this.add.text(centerX, 250, `Gold: ${this.registry.get('gold')}`, {
+            font: '48px monospace',
+            color: '#d4af37'
+        }).setOrigin(0.5);
+
+        // Offline earnings banner (if any)
+        const offlineGold = this.registry.get('offlineGold') as number;
+        if (offlineGold > 0) {
+            this.add.text(centerX, 340, `While away you earned ${offlineGold} gold!`, {
+                font: '30px monospace',
+                color: '#7a5c2e'
+            }).setOrigin(0.5);
+            this.registry.set('gold', (this.registry.get('gold') as number) + offlineGold);
+            this.registry.remove('offlineGold');
+            this.goldText.setText(`Gold: ${this.registry.get('gold')}`);
+        }
+
+        // Depth display
+        this.add.text(centerX, 400, `Deepest depth: ${this.registry.get('highestDepth')}`, {
+            font: '32px monospace',
+            color: '#8a6d3b'
+        }).setOrigin(0.5);
+
+        // Upgrade rows
+        this.createUpgradeRow(centerX, 600, 'Attack', 'attack');
+        this.createUpgradeRow(centerX, 850, 'Max HP', 'health');
+        this.createUpgradeRow(centerX, 1100, 'Offline G/s', 'offlineRate');
+
+        // Enter dungeon button
+        const playBtn = this.add.image(centerX, 1600, 'ui-rpg', 'buttonLong_brown.png')
+            .setInteractive()
+            .setScale(1.5);
+        const playText = this.add.text(centerX, 1595, 'ENTER DUNGEON', {
+            font: '36px monospace',
+            color: '#ffffff'
+        }).setOrigin(0.5);
+
+        playBtn.on('pointerdown', () => {
+            playBtn.setFrame('buttonLong_brown_pressed.png');
+            playText.setY(1605);
+        });
+        playBtn.on('pointerup', () => {
+            playBtn.setFrame('buttonLong_brown.png');
+            playText.setY(1595);
+            DataManager.save(this.registry);
+            this.scene.start('GameScene');
+        });
+        playBtn.on('pointerout', () => {
+            playBtn.setFrame('buttonLong_brown.png');
+            playText.setY(1595);
+        });
+
+        // Persist on exit too
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => DataManager.save(this.registry));
+    }
+
+    private initializeRegistry() {
+        if (this.registry.get('initialized')) return;
+
+        const save = DataManager.load();
+        if (save && save.upgrades) {
+            this.registry.set('gold', save.gold ?? 150);
+            this.registry.set('upgrades', save.upgrades);
+            this.registry.set('highestDepth', save.highestDepth ?? 1);
+            // Offline progress
+            if (save.lastLogin) {
+                const dps = 10 * (save.upgrades.attack as number); // mirrors GameScene formula
+                const offlineGold = DataManager.calculateOfflineProgress(save.lastLogin, dps);
+                if (offlineGold > 0) this.registry.set('offlineGold', Math.min(offlineGold, 99999));
+            }
+        } else {
+            this.registry.set('gold', 150);
+            this.registry.set('upgrades', { attack: 1, health: 1, offlineRate: 1 });
+            this.registry.set('highestDepth', 1);
+        }
+        this.registry.set('initialized', true);
+    }
+
+    private getUpgradeCost(level: number): number {
+        return Math.floor(this.baseCost * Math.pow(this.costMultiplier, level));
+    }
+
+    private createUpgradeRow(x: number, y: number, label: string, upgradeKey: 'attack' | 'health' | 'offlineRate') {
+        const upgrades = this.registry.get('upgrades') as { attack: number; health: number; offlineRate: number };
+        let currentLevel = upgrades[upgradeKey];
+        let cost = this.getUpgradeCost(currentLevel);
+
+        const inset = this.add.image(x, y, 'ui-rpg', 'panelInset_brown.png');
+        inset.setDisplaySize(800, 180);
+
+        const titleText = this.add.text(x - 350, y - 40, label, { font: '36px monospace', color: '#ffffff' });
+        const levelText = this.add.text(x - 350, y + 10, `Lvl: ${currentLevel}`, { font: '28px monospace', color: '#cccccc' });
+
+        const buyBtn = this.add.image(x + 250, y, 'ui-rpg', 'buttonSquare_blue.png').setInteractive();
+        const costText = this.add.text(x + 250, y, `${cost}g`, { font: '28px monospace', color: '#ffffff' }).setOrigin(0.5);
+
+        buyBtn.on('pointerdown', () => {
+            buyBtn.setFrame('buttonSquare_blue_pressed.png');
+            costText.setY(y + 5);
+        });
+        buyBtn.on('pointerup', () => {
+            buyBtn.setFrame('buttonSquare_blue.png');
+            costText.setY(y);
+
+            const currentGold = this.registry.get('gold') as number;
+            if (currentGold >= cost) {
+                this.registry.set('gold', currentGold - cost);
+                this.goldText.setText(`Gold: ${this.registry.get('gold')}`);
+
+                currentLevel++;
+                upgrades[upgradeKey] = currentLevel;
+                this.registry.set('upgrades', upgrades);
+
+                levelText.setText(`Lvl: ${currentLevel}`);
+                cost = this.getUpgradeCost(currentLevel);
+                costText.setText(`${cost}g`);
+                DataManager.save(this.registry);
+            } else {
+                this.tweens.add({
+                    targets: costText,
+                    scale: 1.2,
+                    yoyo: true,
+                    duration: 100
+                });
+            }
+        });
+        buyBtn.on('pointerout', () => {
+            buyBtn.setFrame('buttonSquare_blue.png');
+            costText.setY(y);
+        });
+    }
+}

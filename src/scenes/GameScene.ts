@@ -1,0 +1,277 @@
+import * as Phaser from 'phaser';
+import { DamageTextPool } from '../DamageTextPool';
+
+const TILE = 64;          // 16px art scaled to 64
+const COLS = 17;          // 1080 / 64 ≈ 16.9 → 17 columns
+const ROWS = 18;          // 1152 / 64 = 18 rows (action area only)
+
+type UpgradeKey = 'attack' | 'health' | 'offlineRate';
+
+interface EntityOpts {
+    maxHp: number;
+    attackDamage: number;
+    attackSpeed: number; // ms between attacks
+}
+
+class GameEntity extends Phaser.Physics.Arcade.Sprite {
+    public maxHp: number;
+    public currentHp: number;
+    public attackDamage: number;
+    public attackSpeed: number;
+    protected lastAttackTime = 0;
+    protected hpBar!: Phaser.GameObjects.Graphics;
+
+    constructor(scene: Phaser.Scene, x: number, y: number, texture: string, frame: number, opts: EntityOpts) {
+        super(scene, x, y, texture, frame);
+        scene.add.existing(this);
+        scene.physics.add.existing(this);
+        this.maxHp = opts.maxHp;
+        this.currentHp = opts.maxHp;
+        this.attackDamage = opts.attackDamage;
+        this.attackSpeed = opts.attackSpeed;
+        this.hpBar = scene.add.graphics();
+        this.drawHpBar();
+    }
+
+    get alive(): boolean {
+        return this.active && this.currentHp > 0;
+    }
+
+    drawHpBar() {
+        this.hpBar.clear();
+        const w = 56, h = 8;
+        const x = this.x - w / 2, y = this.y - 44;
+        this.hpBar.fillStyle(0x000000, 0.6).fillRect(x - 1, y - 1, w + 2, h + 2);
+        const pct = Phaser.Math.Clamp(this.currentHp / this.maxHp, 0, 1);
+        this.hpBar.fillStyle(0xe74c3c, 1).fillRect(x, y, w * pct, h);
+    }
+
+    takeDamage(amount: number) {
+        this.currentHp -= amount;
+        this.scene.events.emit('spawnDamageText', this.x, this.y - 20, amount);
+        this.setTintFill(0xffffff);
+        this.scene.time.delayedCall(60, () => { if (this.active) this.clearTint(); });
+        if (this.currentHp <= 0) this.die();
+        else this.drawHpBar();
+    }
+
+    die() {
+        this.currentHp = 0;
+        this.hpBar.destroy();
+        this.destroy();
+    }
+}
+
+class Hero extends GameEntity {
+    private target: Enemy | null = null;
+
+    constructor(scene: Phaser.Scene, x: number, y: number, stats: { attack: number; health: number }) {
+        super(scene, x, y, 'characters', 0, {
+            maxHp: 100 + (stats.health - 1) * 30,
+            attackDamage: 12 + (stats.attack - 1) * 6,
+            attackSpeed: 700
+        });
+        this.setScale(4).setDepth(10).setAlpha(1);
+        this.hpBar.setDepth(11);
+    }
+
+    update(time: number) {
+        if (!this.alive) return;
+        const enemies = (this.scene as GameScene).enemies.filter(e => e.alive);
+
+        if (!this.target || !this.target.alive) {
+            this.target = this.findNearestEnemy(enemies);
+            return;
+        }
+
+        const dist = Phaser.Math.Distance.Between(this.x, this.y, this.target.x, this.target.y);
+        if (dist > 90) {
+            this.scene.physics.moveToObject(this, this.target, 220);
+        } else {
+            (this.body as Phaser.Physics.Arcade.Body).reset(this.x, this.y);
+            if (time > this.lastAttackTime + this.attackSpeed) {
+                this.target.takeDamage(this.attackDamage);
+                this.lastAttackTime = time;
+                // lunge feedback
+                this.scene.tweens.add({ targets: this, scaleX: 4.6, scaleY: 4.6, yoyo: true, duration: 70 });
+            }
+        }
+    }
+
+    private findNearestEnemy(enemies: Enemy[]): Enemy | null {
+        let best: Enemy | null = null;
+        let bestDist = Infinity;
+        for (const e of enemies) {
+            const d = Phaser.Math.Distance.Between(this.x, this.y, e.x, e.y);
+            if (d < bestDist) { bestDist = d; best = e; }
+        }
+        return best;
+    }
+}
+
+class Enemy extends GameEntity {
+    constructor(scene: Phaser.Scene, x: number, y: number, frame: number, depthScale: number) {
+        // Scale HP/damage with depth for progression pressure
+        super(scene, x, y, 'characters', frame, {
+            maxHp: Math.floor((18 + depthScale * 8) * (0.85 + Math.random() * 0.3)),
+            attackDamage: Math.floor(3 + depthScale * 1.2),
+            attackSpeed: 1100
+        });
+        this.setScale(4).setDepth(10);
+        this.hpBar.setDepth(11);
+    }
+
+    update(time: number, hero: Hero) {
+        if (!this.alive || !hero.alive) return;
+        const dist = Phaser.Math.Distance.Between(this.x, this.y, hero.x, hero.y);
+        if (dist > 80) {
+            this.scene.physics.moveToObject(this, hero, 110 + this.attackDamage * 2);
+        } else {
+            (this.body as Phaser.Physics.Arcade.Body).reset(this.x, this.y);
+            if (time > this.lastAttackTime + this.attackSpeed) {
+                hero.takeDamage(this.attackDamage);
+                this.lastAttackTime = time;
+            }
+        }
+    }
+}
+
+export class GameScene extends Phaser.Scene {
+    public enemies: Enemy[] = [];
+    private hero!: Hero;
+    private depthNum = 1;
+    private transitioning = false;
+    private damagePool!: DamageTextPool;
+    private tiles: Phaser.GameObjects.Image[] = [];
+    private doorTile!: Phaser.GameObjects.Image;
+    private runGold = 0;
+    private goldAtRunStart = 0;
+    private depthText!: Phaser.GameObjects.Text;
+
+    constructor() {
+        super('GameScene');
+    }
+
+    init(data: { depth?: number }) {
+        this.depthNum = data.depth ?? 1;
+        this.transitioning = false;
+        this.enemies = [];
+        this.tiles = [];
+        this.runGold = 0;
+    }
+
+    create() {
+        const upgrades = this.registry.get('upgrades') as Record<UpgradeKey, number>;
+        this.goldAtRunStart = this.registry.get('gold') as number;
+
+        this.damagePool = new DamageTextPool(this);
+        this.events.on('spawnDamageText', (x: number, y: number, dmg: number) => {
+            this.damagePool.spawn(x, y, dmg);
+        });
+
+        // Camera bounds: action area only (1080x1152)
+        this.cameras.main.setBounds(0, 0, COLS * TILE, ROWS * TILE);
+
+        // Depth label floats in action area top-left (UIScene shows the rest)
+        this.depthText = this.add.text(30, 24, `DEPTH ${this.depthNum}`, {
+            font: '40px monospace', color: '#ffffff', fontStyle: 'bold'
+        }).setScrollFactor(0).setDepth(200);
+
+        this.buildRoom(upgrades);
+
+        // UI strip runs concurrently above the action camera
+        if (!this.scene.isActive('UIScene')) this.scene.launch('UIScene');
+    }
+
+    /** Single-screen brawler room per LDD */
+    private buildRoom(upgrades: Record<UpgradeKey, number>) {
+        // Floors: x 1-15, y 1-16 randomized variants
+        for (let gy = 1; gy <= ROWS - 2; gy++) {
+            for (let gx = 1; gx <= COLS - 2; gx++) {
+                const variant = `tile_000${Phaser.Math.Between(0, 4)}`;
+                this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2, variant).setDepth(0));
+            }
+        }
+        // Walls: border with corners
+        for (let gx = 0; gx < COLS; gx++) {
+            for (const gy of [0, ROWS - 1]) {
+                this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2,
+                    (gx === 0 || gx === COLS - 1) ? 'tile_0016' : 'tile_0013').setDepth(1));
+            }
+        }
+        for (let gy = 1; gy < ROWS - 1; gy++) {
+            for (const gx of [0, COLS - 1]) {
+                this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2, 'tile_0016').setDepth(1));
+            }
+        }
+
+        // Door at top center — closed while enemies live
+        this.doorTile = this.add.image(8 * TILE + TILE / 2, TILE / 2, 'tile_0034').setDepth(2);
+
+        // Hero spawns bottom center (x: 8, y: 15)
+        this.hero = new Hero(this, 8 * TILE + TILE / 2, 15 * TILE + TILE / 2, upgrades);
+
+        // Enemies: N in top half (y 2-8), count scales with depth
+        const enemyFrames = [68, 74, 82, 96];
+        const count = Math.min(3 + Math.floor(this.depthNum * 0.7), 10);
+        for (let i = 0; i < count; i++) {
+            const ex = Phaser.Math.Between(2, COLS - 3) * TILE + TILE / 2;
+            const ey = Phaser.Math.Between(2, 8) * TILE + TILE / 2;
+            const frame = enemyFrames[i % enemyFrames.length];
+            this.enemies.push(new Enemy(this, ex, ey, frame, this.depthNum));
+        }
+
+        // Physics collision keeps everyone inside the room
+        const walls = this.physics.add.staticGroup();
+        const wallThickness = 8;
+        const W = COLS * TILE, H = ROWS * TILE;
+        walls.add(this.add.rectangle(W / 2, wallThickness / 2, W, wallThickness * 2, 0x000000, 0));
+        walls.add(this.add.rectangle(W / 2, H - wallThickness / 2, W, wallThickness * 2, 0x000000, 0));
+        walls.add(this.add.rectangle(wallThickness / 2, H / 2, wallThickness * 2, H, 0x000000, 0));
+        walls.add(this.add.rectangle(W - wallThickness / 2, H / 2, wallThickness * 2, H, 0x000000, 0));
+        this.physics.add.collider(this.hero, walls);
+        this.enemies.forEach(e => this.physics.add.collider(e, walls));
+
+        this.physics.add.overlap(this.hero, this.enemies, () => { /* contact handled in update */ });
+    }
+
+    update(time: number) {
+        if (!this.hero.alive) {
+            if (!this.transitioning) this.onHeroDeath();
+            return;
+        }
+
+        this.hero.update(time);
+        this.enemies.forEach(e => e.update(time, this.hero));
+        this.hero.drawHpBar();
+
+        // Room cleared → open door → walk through → next depth
+        const allCleared = this.enemies.every(e => !e.alive);
+        if (allCleared && !this.transitioning) {
+            this.transitioning = true;
+            this.doorTile.setTexture('tile_0035'); // open door
+
+            // Reward gold per LDD progression
+            const reward = 25 + this.depthNum * 10;
+            this.runGold += reward;
+
+            this.cameras.main.fadeOut(300, 0, 0, 0, () => {
+                this.registry.set('highestDepth', Math.max(this.registry.get('highestDepth') as number, this.depthNum + 1));
+                this.scene.restart({ depth: this.depthNum + 1 });
+            });
+        }
+    }
+
+    private onHeroDeath() {
+        this.transitioning = true;
+        // Bank run gold into persistent registry (offlineRate adds a small bonus)
+        const rate = this.registry.get('upgrades') ? (this.registry.get('upgrades') as Record<UpgradeKey, number>).offlineRate : 1;
+        const banked = this.runGold + this.goldAtRunStart;
+        this.registry.set('gold', banked + this.depthNum * rate);
+        this.registry.set('lastRunGold', this.runGold);
+        this.registry.set('deathDepth', this.depthNum);
+        this.cameras.main.fadeOut(500, 0, 0, 0, () => {
+            this.scene.start('HubScene');
+        });
+    }
+}
