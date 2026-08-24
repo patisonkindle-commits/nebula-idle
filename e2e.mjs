@@ -4,7 +4,8 @@ const browser = await chromium.launch({ executablePath: '/snap/bin/chromium', ar
 const page = await browser.newPage({ viewport: { width: 540, height: 960 } });
 page.on('pageerror', e => console.log('PAGE EXCEPTION:', e.message));
 
-await page.goto('http://localhost:8777/', { waitUntil: 'load' });
+const BASE = process.argv[2] || 'http://localhost:8777/';
+await page.goto(BASE, { waitUntil: 'load' });
 await page.waitForFunction(() => (() => { const g = window.__game; return g && g.scene.isActive('HubScene'); })(), { timeout: 15000 });
 console.log('1. HUB ACTIVE');
 

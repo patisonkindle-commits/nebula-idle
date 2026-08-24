@@ -50,7 +50,7 @@ export class UIScene extends Phaser.Scene {
         this.hpBar.fillStyle(pct > 0.3 ? 0x2ecc71 : 0xe74c3c, 1).fillRect(X, Y, W * pct, H);
 
         const game = this.scene.get('GameScene') as any;
-        const gold = (this.registry.get('gold') as number) + (game.runGold ?? 0);
+        const gold = (this.registry.get('gold') as number) + ((this.registry.get('runGold') as number) || 0) - (game?.bankedGold ?? 0);
         if (gold !== this.lastGold) {
             this.goldText.setText(`Gold: ${gold}`);
             this.lastGold = gold;

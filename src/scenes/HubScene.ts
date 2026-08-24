@@ -1,10 +1,9 @@
 import * as Phaser from 'phaser';
 import { DataManager } from '../DataManager';
+import { upgradeCost } from '../logic';
 
 export class HubScene extends Phaser.Scene {
     private goldText!: Phaser.GameObjects.Text;
-    private baseCost = 50;
-    private costMultiplier = 1.15;
 
     constructor() {
         super('HubScene');
@@ -49,6 +48,14 @@ export class HubScene extends Phaser.Scene {
             font: '32px monospace',
             color: '#8a6d3b'
         }).setOrigin(0.5);
+
+        const lastRun = this.registry.get('lastRunGold') as number;
+        if (lastRun !== undefined && this.registry.get('deathDepth') !== undefined) {
+            this.add.text(centerX, 455, `Last run: ${lastRun}g @ depth ${this.registry.get('deathDepth')}`, {
+                font: '28px monospace',
+                color: '#6b5231'
+            }).setOrigin(0.5);
+        }
 
         // Upgrade rows
         this.createUpgradeRow(centerX, 600, 'Attack', 'attack');
@@ -105,14 +112,10 @@ export class HubScene extends Phaser.Scene {
         this.registry.set('initialized', true);
     }
 
-    private getUpgradeCost(level: number): number {
-        return Math.floor(this.baseCost * Math.pow(this.costMultiplier, level));
-    }
-
     private createUpgradeRow(x: number, y: number, label: string, upgradeKey: 'attack' | 'health' | 'offlineRate') {
         const upgrades = this.registry.get('upgrades') as { attack: number; health: number; offlineRate: number };
         let currentLevel = upgrades[upgradeKey];
-        let cost = this.getUpgradeCost(currentLevel);
+        let cost = upgradeCost(currentLevel);
 
         const inset = this.add.image(x, y, 'ui-rpg', 'panelInset_brown.png');
         inset.setDisplaySize(800, 180);
@@ -141,7 +144,7 @@ export class HubScene extends Phaser.Scene {
                 this.registry.set('upgrades', upgrades);
 
                 levelText.setText(`Lvl: ${currentLevel}`);
-                cost = this.getUpgradeCost(currentLevel);
+                cost = upgradeCost(currentLevel);
                 costText.setText(`${cost}g`);
                 DataManager.save(this.registry);
             } else {

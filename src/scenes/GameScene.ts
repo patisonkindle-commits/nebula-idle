@@ -1,11 +1,13 @@
 import * as Phaser from 'phaser';
 import { DamageTextPool } from '../DamageTextPool';
+import {
+    heroStats, enemyStats, enemyCount, roomClearReward,
+    isCritical, CRIT_MULTIPLIER, type Upgrades,
+} from '../logic';
 
 const TILE = 64;          // 16px art scaled to 64
 const COLS = 17;          // 1080 / 64 ≈ 16.9 → 17 columns
 const ROWS = 18;          // 1152 / 64 = 18 rows (action area only)
-
-type UpgradeKey = 'attack' | 'health' | 'offlineRate';
 
 interface EntityOpts {
     maxHp: number;
@@ -65,12 +67,8 @@ class GameEntity extends Phaser.Physics.Arcade.Sprite {
 class Hero extends GameEntity {
     private target: Enemy | null = null;
 
-    constructor(scene: Phaser.Scene, x: number, y: number, stats: { attack: number; health: number }) {
-        super(scene, x, y, 'characters', 0, {
-            maxHp: 100 + (stats.health - 1) * 30,
-            attackDamage: 12 + (stats.attack - 1) * 6,
-            attackSpeed: 700
-        });
+    constructor(scene: Phaser.Scene, x: number, y: number, stats: Upgrades) {
+        super(scene, x, y, 'characters', 0, heroStats(stats));
         this.setScale(4).setDepth(10).setAlpha(1);
         this.hpBar.setDepth(11);
     }
@@ -90,7 +88,9 @@ class Hero extends GameEntity {
         } else {
             (this.body as Phaser.Physics.Arcade.Body).reset(this.x, this.y);
             if (time > this.lastAttackTime + this.attackSpeed) {
-                this.target.takeDamage(this.attackDamage);
+                // GDD: 5% chance of 2x critical damage
+                const crit = isCritical(Math.random());
+                this.target.takeDamage(crit ? this.attackDamage * CRIT_MULTIPLIER : this.attackDamage);
                 this.lastAttackTime = time;
                 // lunge feedback
                 this.scene.tweens.add({ targets: this, scaleX: 4.6, scaleY: 4.6, yoyo: true, duration: 70 });
@@ -110,15 +110,28 @@ class Hero extends GameEntity {
 }
 
 class Enemy extends GameEntity {
+    public goldDrop: number;
+
     constructor(scene: Phaser.Scene, x: number, y: number, frame: number, depthScale: number) {
-        // Scale HP/damage with depth for progression pressure
+        // GDD exponential scaling via logic.enemyStats (±15% HP variance)
+        const st = enemyStats(depthScale);
         super(scene, x, y, 'characters', frame, {
-            maxHp: Math.floor((18 + depthScale * 8) * (0.85 + Math.random() * 0.3)),
-            attackDamage: Math.floor(3 + depthScale * 1.2),
+            maxHp: st.maxHp,
+            attackDamage: st.attackDamage,
             attackSpeed: 1100
         });
+        this.goldDrop = st.goldDrop;
         this.setScale(4).setDepth(10);
         this.hpBar.setDepth(11);
+    }
+
+    die() {
+        // GDD: enemy death awards its gold drop immediately
+        const g = this.scene.registry.get('gold') as number;
+        this.scene.registry.set('gold', g + this.goldDrop);
+        const rg = (this.scene.registry.get('runGold') as number) || 0;
+        this.scene.registry.set('runGold', rg + this.goldDrop);
+        super.die();
     }
 
     update(time: number, hero: Hero) {
@@ -144,8 +157,6 @@ export class GameScene extends Phaser.Scene {
     private damagePool!: DamageTextPool;
     private tiles: Phaser.GameObjects.Image[] = [];
     private doorTile!: Phaser.GameObjects.Image;
-    private runGold = 0;
-    private goldAtRunStart = 0;
     private depthText!: Phaser.GameObjects.Text;
 
     constructor() {
@@ -157,12 +168,12 @@ export class GameScene extends Phaser.Scene {
         this.transitioning = false;
         this.enemies = [];
         this.tiles = [];
-        this.runGold = 0;
+        if (this.depthNum === 1) this.registry.set('runGold', 0); // fresh run
     }
 
     create() {
-        const upgrades = this.registry.get('upgrades') as Record<UpgradeKey, number>;
-        this.goldAtRunStart = this.registry.get('gold') as number;
+        const upgrades = this.registry.get('upgrades') as Upgrades;
+        (this as any).bankedGold = this.registry.get('gold') as number;
 
         this.damagePool = new DamageTextPool(this);
         this.events.on('spawnDamageText', (x: number, y: number, dmg: number) => {
@@ -184,7 +195,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     /** Single-screen brawler room per LDD */
-    private buildRoom(upgrades: Record<UpgradeKey, number>) {
+    private buildRoom(upgrades: Upgrades) {
         // Floors: x 1-15, y 1-16 randomized variants
         for (let gy = 1; gy <= ROWS - 2; gy++) {
             for (let gx = 1; gx <= COLS - 2; gx++) {
@@ -213,7 +224,7 @@ export class GameScene extends Phaser.Scene {
 
         // Enemies: N in top half (y 2-8), count scales with depth
         const enemyFrames = [68, 74, 82, 96];
-        const count = Math.min(3 + Math.floor(this.depthNum * 0.7), 10);
+        const count = enemyCount(this.depthNum);
         for (let i = 0; i < count; i++) {
             const ex = Phaser.Math.Between(2, COLS - 3) * TILE + TILE / 2;
             const ey = Phaser.Math.Between(2, 8) * TILE + TILE / 2;
@@ -252,8 +263,9 @@ export class GameScene extends Phaser.Scene {
             this.doorTile.setTexture('tile_0035'); // open door
 
             // Reward gold per LDD progression
-            const reward = 25 + this.depthNum * 10;
-            this.runGold += reward;
+            const reward = roomClearReward(this.depthNum);
+            this.registry.set('gold', (this.registry.get('gold') as number) + reward);
+            this.registry.set('runGold', ((this.registry.get('runGold') as number) || 0) + reward);
 
             this.cameras.main.fadeOut(300, 0, 0, 0, () => {
                 this.registry.set('highestDepth', Math.max(this.registry.get('highestDepth') as number, this.depthNum + 1));
@@ -264,11 +276,10 @@ export class GameScene extends Phaser.Scene {
 
     private onHeroDeath() {
         this.transitioning = true;
-        // Bank run gold into persistent registry (offlineRate adds a small bonus)
-        const rate = this.registry.get('upgrades') ? (this.registry.get('upgrades') as Record<UpgradeKey, number>).offlineRate : 1;
-        const banked = this.runGold + this.goldAtRunStart;
-        this.registry.set('gold', banked + this.depthNum * rate);
-        this.registry.set('lastRunGold', this.runGold);
+        // Kill drops + clear bonuses were credited to registry.gold as earned;
+        // record the run total for the hub summary
+        this.registry.set('lastRunGold', (this.registry.get('runGold') as number) || 0);
+        this.registry.remove('runGold');
         this.registry.set('deathDepth', this.depthNum);
         this.cameras.main.fadeOut(500, 0, 0, 0, () => {
             this.scene.start('HubScene');
