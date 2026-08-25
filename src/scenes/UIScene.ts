@@ -38,7 +38,7 @@ export class UIScene extends Phaser.Scene {
 
     update() {
         const gs = this.scene.get('GameScene') as any;
-        if (!gs || !gs.hero) return;
+        if (!gs || !gs.hero || !this.scene.isActive('GameScene')) return;
 
         const hero = gs.hero;
         const top = 1152;

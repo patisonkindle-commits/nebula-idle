@@ -48,7 +48,7 @@ class GameEntity extends Phaser.Physics.Arcade.Sprite {
     drawHpBar() {
         this.hpBar.clear();
         const w = 56, h = 8;
-        const top = this.y - (this.displayHeight * this.scaleY) / 2;
+        const top = this.y - this.displayHeight / 2; // displayHeight already scaled
         const x = this.x - w / 2, y = top - h / 2 - 6;
         this.hpBar.fillStyle(0x000000, 0.6).fillRect(x - 1, y - 1, w + 2, h + 2);
         const pct = Phaser.Math.Clamp(this.currentHp / this.maxHp, 0, 1);
@@ -348,6 +348,7 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('lastRunGold', (this.registry.get('runGold') as number) || 0);
         this.registry.remove('runGold');
         this.registry.set('deathDepth', this.depthNum);
+        this.scene.stop('UIScene'); // hero HP panel must not survive into the hub
         this.cameras.main.fadeOut(500, 0, 0, 0, () => {
             this.scene.start('HubScene');
         });
