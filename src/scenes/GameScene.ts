@@ -33,6 +33,11 @@ class GameEntity extends Phaser.Physics.Arcade.Sprite {
         this.attackDamage = opts.attackDamage;
         this.attackSpeed = opts.attackSpeed;
         this.hpBar = scene.add.graphics();
+    }
+
+    /** Keep HP bar glued to the sprite as it moves */
+    preUpdate(time: number, delta: number) {
+        super.preUpdate(time, delta);
         this.drawHpBar();
     }
 
@@ -43,7 +48,8 @@ class GameEntity extends Phaser.Physics.Arcade.Sprite {
     drawHpBar() {
         this.hpBar.clear();
         const w = 56, h = 8;
-        const x = this.x - w / 2, y = this.y - 44;
+        const top = this.y - (this.displayHeight * this.scaleY) / 2;
+        const x = this.x - w / 2, y = top - h / 2 - 6;
         this.hpBar.fillStyle(0x000000, 0.6).fillRect(x - 1, y - 1, w + 2, h + 2);
         const pct = Phaser.Math.Clamp(this.currentHp / this.maxHp, 0, 1);
         this.hpBar.fillStyle(0xe74c3c, 1).fillRect(x, y, w * pct, h);
@@ -72,7 +78,7 @@ class Hero extends GameEntity {
 
     constructor(scene: Phaser.Scene, x: number, y: number, stats: Upgrades) {
         const stats2 = heroStats(stats);
-        super(scene, x, y, 'characters', 99, stats2); // sword-knight hero (GDD asset map)
+        super(scene, x, y, 'tile_0100', 0, stats2); // sword-knight hero (Tiny Dungeon 100)
         this.critChance = stats2.critChance;
         this.setScale(4).setDepth(10).setAlpha(1);
         this.hpBar.setDepth(11);
@@ -123,10 +129,10 @@ class Hero extends GameEntity {
 class Enemy extends GameEntity {
     public goldDrop: number;
 
-    constructor(scene: Phaser.Scene, x: number, y: number, frame: number, depthScale: number) {
+    constructor(scene: Phaser.Scene, x: number, y: number, texKey: string, depthScale: number) {
         // GDD exponential scaling via logic.enemyStats (±15% HP variance)
         const st = enemyStats(depthScale);
-        super(scene, x, y, 'characters', frame, {
+        super(scene, x, y, texKey, 0, {
             maxHp: st.maxHp,
             attackDamage: st.attackDamage,
             attackSpeed: 1100
@@ -275,8 +281,8 @@ export class GameScene extends Phaser.Scene {
             const ex = Phaser.Math.Between(2, COLS - 3) * TILE + TILE / 2;
             const ey = Phaser.Math.Between(2, 8) * TILE + TILE / 2;
             // GDD enemy variety: skeleton, rat, orange bat, teal bat, purple slime, brown grunt
-            const frame = Phaser.Math.RND.pick([1, 6, 114, 118, 14, 108]);
-            this.enemies.push(new Enemy(this, ex, ey, frame, this.depthNum));
+            const tex = Phaser.Math.RND.pick(['tile_0108','tile_0113','tile_0122','tile_0123','tile_0124']);
+            this.enemies.push(new Enemy(this, ex, ey, tex, this.depthNum));
         }
 
         // Physics collision keeps everyone inside the room
@@ -301,7 +307,6 @@ export class GameScene extends Phaser.Scene {
 
         this.hero.update(time);
         this.enemies.forEach(e => e.update(time, this.hero));
-        this.hero.drawHpBar();
 
         // Sword cursor tracks priority target; drop it when target dies
         if (this.targetCursor) {

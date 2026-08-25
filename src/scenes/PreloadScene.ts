@@ -32,6 +32,11 @@ export class PreloadScene extends Phaser.Scene {
         ];
         requiredTiles.forEach(tile => this.load.image(tile, `assets/tiles/${tile}.png`));
 
+        // Creature sprites (Tiny Dungeon): knight 100, green slime 108, cyan slime 113,
+        // spider 122, rat 123, blue spider 124
+        const creatures = ['tile_0100','tile_0108','tile_0113','tile_0122','tile_0123','tile_0124'];
+        creatures.forEach(t => this.load.image(t, `assets/tiles/${t}.png`));
+
         // 4. Audio (procedurally generated chiptune, self-made → license-clean)
         const sfx = ['hit', 'crit', 'coin', 'door', 'death'];
         sfx.forEach(k => this.load.audio(k, `assets/audio/${k}.wav`));
