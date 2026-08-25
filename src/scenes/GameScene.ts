@@ -80,7 +80,7 @@ class Hero extends GameEntity {
         const stats2 = heroStats(stats);
         super(scene, x, y, 'tile_0100', 0, stats2); // sword-knight hero (Tiny Dungeon 100)
         this.critChance = stats2.critChance;
-        this.setScale(4).setDepth(10).setAlpha(1);
+        this.setScale(6).setDepth(10).setAlpha(1);
         this.hpBar.setDepth(11);
     }
 
@@ -110,7 +110,7 @@ class Hero extends GameEntity {
                 this.scene.sound.play(crit ? 'crit' : 'hit', { volume: 0.4 });
                 this.lastAttackTime = time;
                 // lunge feedback
-                this.scene.tweens.add({ targets: this, scaleX: 4.6, scaleY: 4.6, yoyo: true, duration: 70 });
+                this.scene.tweens.add({ targets: this, scaleX: 6.9, scaleY: 6.9, yoyo: true, duration: 70 });
             }
         }
     }
@@ -138,7 +138,7 @@ class Enemy extends GameEntity {
             attackSpeed: 1100
         });
         this.goldDrop = st.goldDrop;
-        this.setScale(4).setDepth(10);
+        this.setScale(6).setDepth(10);
         this.hpBar.setDepth(11);
     }
 
