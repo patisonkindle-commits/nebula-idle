@@ -265,12 +265,12 @@ export class GameScene extends Phaser.Scene {
         this.hero = new Hero(this, 8 * TILE + TILE / 2, 15 * TILE + TILE / 2, upgrades);
 
         // Enemies: N in top half (y 2-8), count scales with depth
-        const enemyFrames = [68, 74, 82, 96];
+        // GDD asset map: slime/skeleton/goblin variety from character sheet rows 5-8
         const count = enemyCount(this.depthNum);
         for (let i = 0; i < count; i++) {
             const ex = Phaser.Math.Between(2, COLS - 3) * TILE + TILE / 2;
             const ey = Phaser.Math.Between(2, 8) * TILE + TILE / 2;
-            const frame = enemyFrames[i % enemyFrames.length];
+            const frame = Phaser.Math.RND.pick([68, 69, 70, 74, 75, 82, 96]);
             this.enemies.push(new Enemy(this, ex, ey, frame, this.depthNum));
         }
 

@@ -29,8 +29,9 @@ export class HubScene extends Phaser.Scene {
         else this.sound.once(Phaser.Sound.Events.UNLOCKED, startBgm);
 
         // Background panel
-        const bg = this.add.image(centerX, height / 2, 'ui-rpg', 'panel_beige.png');
-        bg.setDisplaySize(1000, 1800);
+        // GDD asset map: NineSlice keeps corners undistorted (Phaser 3.60+)
+        this.add.nineslice(centerX, height / 2, 'ui-rpg', 'panel_beige.png',
+            1000, 1800, 48, 48, 48, 48);
 
         this.add.text(centerX, 150, 'BASE CAMP', {
             font: '64px monospace',
@@ -152,8 +153,7 @@ export class HubScene extends Phaser.Scene {
         let currentLevel = upgrades[upgradeKey];
         let cost = upgradeCost(currentLevel);
 
-        const inset = this.add.image(x, y, 'ui-rpg', 'panelInset_brown.png');
-        inset.setDisplaySize(800, 180);
+        this.add.nineslice(x, y, 'ui-rpg', 'panelInset_brown.png', 800, 180, 24, 24, 24, 24);
 
         const titleText = this.add.text(x - 350, y - 40, label, { font: '36px monospace', color: '#ffffff' });
         const levelText = this.add.text(x - 350, y + 10, `Lvl: ${currentLevel}`, { font: '28px monospace', color: '#cccccc' });
