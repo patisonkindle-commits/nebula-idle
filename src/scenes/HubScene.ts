@@ -102,32 +102,32 @@ export class HubScene extends Phaser.Scene {
         });
 
         // Enter dungeon button
-        const playBtn = this.add.image(centerX, 1900, 'ui-rpg', 'buttonLong_brown.png')
+        const playBtn = this.add.image(centerX, 1880, 'ui-rpg', 'buttonLong_brown.png')
             .setInteractive()
             .setScale(1.5);
-        const playText = this.add.text(centerX, 1595, 'ENTER DUNGEON', {
+        const playText = this.add.text(centerX, 1880, 'ENTER DUNGEON', {
             font: '36px monospace',
             color: '#ffffff'
         }).setOrigin(0.5);
 
         playBtn.on('pointerdown', () => {
             playBtn.setFrame('buttonLong_brown_pressed.png');
-            playText.setY(1605);
+            playText.setY(1890);
         });
         playBtn.on('pointerup', () => {
             playBtn.setFrame('buttonLong_brown.png');
-            playText.setY(1595);
+            playText.setY(1880);
             DataManager.save(this.registry);
             this.scene.start('GameScene');
         });
         playBtn.on('pointerout', () => {
             playBtn.setFrame('buttonLong_brown.png');
-            playText.setY(1595);
+            playText.setY(1880);
         });
 
         // Persist on exit too
         // Drag-to-scroll (native camera bounds — no plugin needed)
-        const worldH = 2100;
+        const worldH = 2000;
         this.cameras.main.setBounds(0, 0, width, worldH);
         let dragging = false;
         let dragStartY = 0;
