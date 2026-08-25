@@ -66,6 +66,8 @@ class GameEntity extends Phaser.Physics.Arcade.Sprite {
 
 class Hero extends GameEntity {
     private target: Enemy | null = null;
+    /** Player-tapped priority target (GDD controls spec); null = auto-nearest */
+    public priorityTarget: Enemy | null = null;
 
     constructor(scene: Phaser.Scene, x: number, y: number, stats: Upgrades) {
         super(scene, x, y, 'characters', 0, heroStats(stats));
@@ -77,9 +79,14 @@ class Hero extends GameEntity {
         if (!this.alive) return;
         const enemies = (this.scene as GameScene).enemies.filter(e => e.alive);
 
-        if (!this.target || !this.target.alive) {
+        // GDD: tapped enemy overrides auto-target until it dies
+        if (this.priorityTarget && this.priorityTarget.alive) {
+            this.target = this.priorityTarget;
+        } else if (!this.target || !this.target.alive) {
             this.target = this.findNearestEnemy(enemies);
             return;
+        } else if (this.priorityTarget) {
+            this.priorityTarget = null; // priority died, back to auto
         }
 
         const dist = Phaser.Math.Distance.Between(this.x, this.y, this.target.x, this.target.y);
@@ -190,8 +197,42 @@ export class GameScene extends Phaser.Scene {
 
         this.buildRoom(upgrades);
 
+        // GDD controls: tap an enemy to set priority target; sword cursor above it
+        this.input.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
+            if (this.transitioning) return;
+            const wp = ptr.worldX, wy = ptr.worldY;
+            let best: Enemy | null = null;
+            let bestDist = Infinity;
+            for (const e of this.enemies) {
+                if (!e.alive) continue;
+                const d = Phaser.Math.Distance.Between(wp, wy, e.x, e.y);
+                if (d < 60 && d < bestDist) { best = e; bestDist = d; }
+            }
+            this.setPriorityTarget(best);
+        });
+
         // UI strip runs concurrently above the action camera
         if (!this.scene.isActive('UIScene')) this.scene.launch('UIScene');
+    }
+
+    private targetCursor: Phaser.GameObjects.Image | null = null;
+
+    /** GDD: tapped enemy gets priority + cursorSword_gold marker above it */
+    private setPriorityTarget(enemy: Enemy | null) {
+        const hero = this.hero;
+        if (hero) hero.priorityTarget = enemy;
+        if (this.targetCursor) { this.targetCursor.destroy(); this.targetCursor = null; }
+        if (!enemy) return;
+        this.targetCursor = this.add.image(enemy.x, enemy.y - 70, 'ui-rpg', 'cursorSword_gold.png')
+            .setScale(3).setDepth(50);
+        this.tweens.add({
+            targets: this.targetCursor,
+            y: '-=10',
+            duration: 500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+        });
     }
 
     /** Single-screen brawler room per LDD */
@@ -255,6 +296,18 @@ export class GameScene extends Phaser.Scene {
         this.hero.update(time);
         this.enemies.forEach(e => e.update(time, this.hero));
         this.hero.drawHpBar();
+
+        // Sword cursor tracks priority target; drop it when target dies
+        if (this.targetCursor) {
+            const pt = this.hero.priorityTarget;
+            if (!pt || !pt.alive) {
+                this.targetCursor.destroy();
+                this.targetCursor = null;
+                if (pt && !pt.alive) this.hero.priorityTarget = null;
+            } else {
+                this.targetCursor.setPosition(pt.x, pt.y - 70);
+            }
+        }
 
         // Room cleared → open door → walk through → next depth
         const allCleared = this.enemies.every(e => !e.alive);
