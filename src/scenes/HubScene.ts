@@ -182,7 +182,9 @@ export class HubScene extends Phaser.Scene {
         const titleText = this.add.text(x - 350, y - 40, label, { font: '36px monospace', color: '#ffffff' });
         const levelText = this.add.text(x - 350, y + 10, `Lvl: ${currentLevel}`, { font: '28px monospace', color: '#cccccc' });
 
-        const buyBtn = this.add.image(x + 250, y, 'ui-rpg', 'buttonSquare_blue.png').setInteractive();
+        // 45x49 sprite ×1.4 scale → ~63px hit target (Android 48dp guideline)
+        const buyBtn = this.add.image(x + 250, y, 'ui-rpg', 'buttonSquare_blue.png')
+            .setScale(1.4).setInteractive({ useHandCursor: true });
         const costText = this.add.text(x + 250, y, `${cost}g`, { font: '28px monospace', color: '#ffffff' }).setOrigin(0.5);
 
         buyBtn.on('pointerdown', () => {

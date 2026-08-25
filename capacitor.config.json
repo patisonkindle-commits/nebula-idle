@@ -1,0 +1,11 @@
+{
+    "appId": "com.patison.nebulaidle",
+    "appName": "Nebula Idle",
+    "webDir": "dist",
+    "android": {
+        "allowMixedContent": false
+    },
+    "server": {
+        "androidScheme": "https"
+    }
+}
