@@ -30,6 +30,11 @@ export class PreloadScene extends Phaser.Scene {
             'tile_0034', 'tile_0035'
         ];
         requiredTiles.forEach(tile => this.load.image(tile, `assets/tiles/${tile}.png`));
+
+        // 4. Audio (procedurally generated chiptune, self-made → license-clean)
+        const sfx = ['hit', 'crit', 'coin', 'door', 'death'];
+        sfx.forEach(k => this.load.audio(k, `assets/audio/${k}.wav`));
+        this.load.audio('bgm', 'assets/audio/bgm.wav');
     }
 
     create() {

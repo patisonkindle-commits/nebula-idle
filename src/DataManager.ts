@@ -9,6 +9,7 @@ export interface SaveData {
     highestDepth: number;
     lastLogin: number;
     upgrades: Upgrades;
+    muted?: boolean;
 }
 
 const KEY = 'nebulaIdleSave';

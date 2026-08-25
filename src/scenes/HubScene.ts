@@ -16,6 +16,18 @@ export class HubScene extends Phaser.Scene {
 
         this.initializeRegistry();
 
+        // BGM loop (persisted mute toggle). Browser autoplay policy: wait for
+        // first user gesture before audio can start.
+        const startBgm = () => {
+            this.sound.stopAll();
+            if (!(this.registry.get('muted') as boolean)) {
+                this.sound.add('bgm', { loop: true, volume: 0.25 }).play();
+            }
+            this.sound.setMute(!!(this.registry.get('muted') as boolean));
+        };
+        if (!this.sound.locked) startBgm();
+        else this.sound.once(Phaser.Sound.Events.UNLOCKED, startBgm);
+
         // Background panel
         const bg = this.add.image(centerX, height / 2, 'ui-rpg', 'panel_beige.png');
         bg.setDisplaySize(1000, 1800);
@@ -30,6 +42,18 @@ export class HubScene extends Phaser.Scene {
             font: '48px monospace',
             color: '#d4af37'
         }).setOrigin(0.5);
+
+        // Mute toggle (persisted)
+        const muted = !!(this.registry.get('muted') as boolean);
+        const muteBtn = this.add.text(width - 60, 60, muted ? '\u266a\u0332' : '\u266a', {
+            font: '44px monospace', color: muted ? '#999999' : '#5c4033'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        muteBtn.on('pointerdown', () => {
+            const now = !(this.registry.get('muted') as boolean);
+            this.registry.set('muted', now);
+            this.sound.setMute(now);
+            muteBtn.setColor(now ? '#999999' : '#5c4033');
+        });
 
         // Offline earnings banner (if any)
         const offlineGold = this.registry.get('offlineGold') as number;
@@ -108,6 +132,7 @@ export class HubScene extends Phaser.Scene {
             this.registry.set('gold', save.gold ?? 150);
             this.registry.set('upgrades', save.upgrades);
             this.registry.set('highestDepth', save.highestDepth ?? 1);
+            this.registry.set('muted', !!save.muted);
             // Offline progress
             if (save.lastLogin) {
                 const earned = DataManager.calculateOfflineProgress(

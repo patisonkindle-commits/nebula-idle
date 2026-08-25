@@ -98,6 +98,7 @@ class Hero extends GameEntity {
                 // GDD: 5% chance of 2x critical damage
                 const crit = isCritical(Math.random());
                 this.target.takeDamage(crit ? this.attackDamage * CRIT_MULTIPLIER : this.attackDamage);
+                this.scene.sound.play(crit ? 'crit' : 'hit', { volume: 0.4 });
                 this.lastAttackTime = time;
                 // lunge feedback
                 this.scene.tweens.add({ targets: this, scaleX: 4.6, scaleY: 4.6, yoyo: true, duration: 70 });
@@ -314,6 +315,8 @@ export class GameScene extends Phaser.Scene {
         if (allCleared && !this.transitioning) {
             this.transitioning = true;
             this.doorTile.setTexture('tile_0035'); // open door
+            this.sound.play('door', { volume: 0.5 });
+            this.sound.play('coin', { volume: 0.4 });
 
             // Reward gold per LDD progression
             const reward = roomClearReward(this.depthNum);
@@ -329,6 +332,7 @@ export class GameScene extends Phaser.Scene {
 
     private onHeroDeath() {
         this.transitioning = true;
+        this.sound.play('death', { volume: 0.5 });
         // Kill drops + clear bonuses were credited to registry.gold as earned;
         // record the run total for the hub summary
         this.registry.set('lastRunGold', (this.registry.get('runGold') as number) || 0);
