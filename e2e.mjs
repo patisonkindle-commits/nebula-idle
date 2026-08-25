@@ -26,7 +26,7 @@ const state = await page.evaluate(() => JSON.stringify({
 console.log('2. BUY ATTACK:', goldBefore, '→', state);
 
 // Enter dungeon
-await click(540, 1600);
+await click(540, 1900);
 await page.waitForFunction(() => window.__game.scene.isActive('GameScene'), { timeout: 10000 });
 console.log('3. GAME ACTIVE');
 

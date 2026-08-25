@@ -4,6 +4,7 @@ import {
     enemyStats, enemyCount, roomClearReward,
     isCritical, offlineGold, BASE_COST, OFFLINE_CAP,
 } from '../src/logic';
+import { migrateSave } from '../src/DataManager';
 
 describe('upgradeCost (GDD: floor(50 * 1.15^L))', () => {
     it('level 1 costs floor(50*1.15)=57', () => expect(upgradeCost(1)).toBe(57));
@@ -108,4 +109,52 @@ describe('offlineGold (PRD: dps × depth × rate)', () => {
     });
     it('caps at OFFLINE_CAP', () =>
         expect(offlineGold(365 * 24 * 3600, 500)).toBeLessThanOrEqual(OFFLINE_CAP));
+});
+
+describe('heroStats with attackSpeed + critChance upgrades', () => {
+    const base = { attack: 1, health: 1, offlineRate: 1, attackSpeed: 1, critChance: 1 };
+    it('level 1 → baseline 700ms / 5% crit', () => {
+        const s = heroStats(base);
+        expect(s.attackSpeed).toBe(700);
+        expect(s.critChance).toBeCloseTo(0.05);
+    });
+    it('attackSpeed: −25ms per level, floor 350ms', () => {
+        expect(heroStats({ ...base, attackSpeed: 2 }).attackSpeed).toBe(675);
+        expect(heroStats({ ...base, attackSpeed: 5 }).attackSpeed).toBe(600);
+        expect(heroStats({ ...base, attackSpeed: 100 }).attackSpeed).toBe(350); // capped
+    });
+    it('critChance: +0.75% per level, cap 30%', () => {
+        expect(heroStats({ ...base, critChance: 2 }).critChance).toBeCloseTo(0.0575);
+        expect(heroStats({ ...base, critChance: 10 }).critChance).toBeCloseTo(0.1175);
+        expect(heroStats({ ...base, critChance: 100 }).critChance).toBeCloseTo(0.30); // capped
+    });
+    it('dps rises as attackSpeed levels up (offline earnings scale)', () => {
+        expect(heroDps({ ...base, attackSpeed: 3 })).toBeGreaterThan(heroDps(base));
+    });
+    it('isCritical uses hero crit chance', () => {
+        expect(isCritical(0.056, 0.0575)).toBe(true);
+        expect(isCritical(0.06, 0.0575)).toBe(false);
+    });
+});
+
+describe('migrateSave (schema migration)', () => {
+    it('old save without new keys gets level-1 defaults', () => {
+        const m = migrateSave({ gold: 999, highestDepth: 4, lastLogin: 123,
+            upgrades: { attack: 2, health: 3, offlineRate: 1 } });
+        expect(m.upgrades.attackSpeed).toBe(1);
+        expect(m.upgrades.critChance).toBe(1);
+        expect(m.upgrades.attack).toBe(2); // preserved
+    });
+    it('existing new keys preserved', () => {
+        const m = migrateSave({ gold: 1, highestDepth: 1, lastLogin: 1,
+            upgrades: { attack: 1, health: 1, offlineRate: 1, attackSpeed: 7, critChance: 9 } });
+        expect(m.upgrades.attackSpeed).toBe(7);
+        expect(m.upgrades.critChance).toBe(9);
+    });
+    it('garbage/missing upgrades → fresh defaults', () => {
+        const m = migrateSave({ gold: 1 });
+        expect(m.upgrades.attack).toBe(1);
+        expect(m.upgrades.attackSpeed).toBe(1);
+        expect(m.gold).toBe(1);
+    });
 });

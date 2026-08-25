@@ -1,9 +1,24 @@
 import * as Phaser from 'phaser';
 import { heroDps, offlineGold, type Upgrades } from './logic';
 
-/**
- * SaveData shape persisted to localStorage. Registry holds the same live data.
- */
+/** Fill missing upgrade keys with level-1 defaults; tolerate partial/garbage saves */
+export function migrateSave(raw: Partial<SaveData> | null | undefined): SaveData {
+    const up: Partial<Upgrades> = (raw && typeof raw === 'object' && raw.upgrades) || {};
+    return {
+        gold: typeof raw?.gold === 'number' ? raw.gold : 150,
+        highestDepth: raw?.highestDepth ?? 1,
+        lastLogin: raw?.lastLogin ?? 0,
+        muted: !!raw?.muted,
+        upgrades: {
+            attack: up.attack ?? 1,
+            health: up.health ?? 1,
+            offlineRate: up.offlineRate ?? 1,
+            attackSpeed: up.attackSpeed ?? 1,
+            critChance: up.critChance ?? 1,
+        },
+    };
+}
+
 export interface SaveData {
     gold: number;
     highestDepth: number;

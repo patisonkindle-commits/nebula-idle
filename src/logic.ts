@@ -9,6 +9,10 @@ export interface Upgrades {
     attack: number;
     health: number;
     offlineRate: number;
+    /** ms between attacks; each level −25ms, floor 350ms */
+    attackSpeed?: number;
+    /** crit chance; each level +0.75%, cap 30% (base 5%) */
+    critChance?: number;
 }
 
 // --- Upgrade economy (GDD: cost(L) = floor(BASE * MULT^L)) ---
@@ -21,10 +25,15 @@ export function upgradeCost(level: number): number {
 
 // --- Hero stats (tuned values from playtest session, kept stable) ---
 export function heroStats(u: Upgrades) {
+    const asLvl = Math.max(1, u.attackSpeed ?? 1);
+    const ccLvl = Math.max(1, u.critChance ?? 1);
     return {
         maxHp: 100 + (u.health - 1) * 30,
         attackDamage: 12 + (u.attack - 1) * 6,
-        attackSpeed: 700, // ms between attacks
+        // −25ms/level, floor 350ms
+        attackSpeed: Math.max(350, 700 - (asLvl - 1) * 25),
+        // base 5% +0.75%/level, cap 30%
+        critChance: Math.min(0.30, 0.05 + (ccLvl - 1) * 0.0075),
     };
 }
 
@@ -57,8 +66,8 @@ export function roomClearReward(depth: number): number {
 export const CRIT_CHANCE = 0.05;
 export const CRIT_MULTIPLIER = 2;
 
-export function isCritical(rnd: number): boolean {
-    return rnd < CRIT_CHANCE;
+export function isCritical(rnd: number, chance: number = CRIT_CHANCE): boolean {
+    return rnd < chance;
 }
 
 // --- Offline progress (PRD: based on DPS, deepest floor, time away) ---

@@ -23,6 +23,7 @@ class GameEntity extends Phaser.Physics.Arcade.Sprite {
     protected lastAttackTime = 0;
     protected hpBar!: Phaser.GameObjects.Graphics;
 
+    critChance = 0.05;
     constructor(scene: Phaser.Scene, x: number, y: number, texture: string, frame: number, opts: EntityOpts) {
         super(scene, x, y, texture, frame);
         scene.add.existing(this);
@@ -70,7 +71,9 @@ class Hero extends GameEntity {
     public priorityTarget: Enemy | null = null;
 
     constructor(scene: Phaser.Scene, x: number, y: number, stats: Upgrades) {
-        super(scene, x, y, 'characters', 0, heroStats(stats));
+        const stats2 = heroStats(stats);
+        super(scene, x, y, 'characters', 0, stats2);
+        this.critChance = stats2.critChance;
         this.setScale(4).setDepth(10).setAlpha(1);
         this.hpBar.setDepth(11);
     }
@@ -96,7 +99,7 @@ class Hero extends GameEntity {
             (this.body as Phaser.Physics.Arcade.Body).reset(this.x, this.y);
             if (time > this.lastAttackTime + this.attackSpeed) {
                 // GDD: 5% chance of 2x critical damage
-                const crit = isCritical(Math.random());
+                const crit = isCritical(Math.random(), this.critChance);
                 this.target.takeDamage(crit ? this.attackDamage * CRIT_MULTIPLIER : this.attackDamage);
                 this.scene.sound.play(crit ? 'crit' : 'hit', { volume: 0.4 });
                 this.lastAttackTime = time;

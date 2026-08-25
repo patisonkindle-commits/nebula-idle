@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { DataManager } from '../DataManager';
+import { migrateSave } from '../DataManager';
 import { upgradeCost } from '../logic';
 
 export class HubScene extends Phaser.Scene {
@@ -83,9 +84,12 @@ export class HubScene extends Phaser.Scene {
         }
 
         // Upgrade rows
-        this.createUpgradeRow(centerX, 600, 'Attack', 'attack');
-        this.createUpgradeRow(centerX, 850, 'Max HP', 'health');
-        this.createUpgradeRow(centerX, 1100, 'Offline G/s', 'offlineRate');
+        // 5 rows @250px spacing — fits 960px-tall design only via P8 scrollable panel
+        const rows: [string, 'attack' | 'health' | 'offlineRate' | 'attackSpeed' | 'critChance'][] = [
+            ['Attack', 'attack'], ['Max HP', 'health'], ['Offline G/s', 'offlineRate'],
+            ['Attack Speed', 'attackSpeed'], ['Crit Chance', 'critChance'],
+        ];
+        rows.forEach(([label, key], i) => this.createUpgradeRow(centerX, 600 + i * 250, label, key));
 
         // Autosave every 30s and on tab hide/close so lastLogin stays fresh
         this.time.addEvent({ delay: 30000, loop: true, callback: () => DataManager.save(this.registry) });
@@ -98,7 +102,7 @@ export class HubScene extends Phaser.Scene {
         });
 
         // Enter dungeon button
-        const playBtn = this.add.image(centerX, 1600, 'ui-rpg', 'buttonLong_brown.png')
+        const playBtn = this.add.image(centerX, 1900, 'ui-rpg', 'buttonLong_brown.png')
             .setInteractive()
             .setScale(1.5);
         const playText = this.add.text(centerX, 1595, 'ENTER DUNGEON', {
@@ -122,6 +126,24 @@ export class HubScene extends Phaser.Scene {
         });
 
         // Persist on exit too
+        // Drag-to-scroll (native camera bounds — no plugin needed)
+        const worldH = 2100;
+        this.cameras.main.setBounds(0, 0, width, worldH);
+        let dragging = false;
+        let dragStartY = 0;
+        let camStartY = 0;
+        this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+            dragging = true; dragStartY = p.y; camStartY = this.cameras.main.scrollY;
+        });
+        this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+            if (dragging) {
+                const zoom = this.cameras.main.zoom;
+                this.cameras.main.setScroll(0,
+                    Phaser.Math.Clamp(camStartY - (p.y - dragStartY) / zoom, 0, worldH - height / zoom));
+            }
+        });
+        this.input.on('pointerup', () => { dragging = false; });
+
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => DataManager.save(this.registry));
     }
 
@@ -130,26 +152,28 @@ export class HubScene extends Phaser.Scene {
 
         const save = DataManager.load();
         if (save && save.upgrades) {
-            this.registry.set('gold', save.gold ?? 150);
-            this.registry.set('upgrades', save.upgrades);
-            this.registry.set('highestDepth', save.highestDepth ?? 1);
-            this.registry.set('muted', !!save.muted);
+            const m = migrateSave(save);
+            this.registry.set('gold', m.gold);
+            this.registry.set('upgrades', m.upgrades);
+            this.registry.set('highestDepth', m.highestDepth);
             // Offline progress
             if (save.lastLogin) {
                 const earned = DataManager.calculateOfflineProgress(
-                    save.lastLogin, save.upgrades, save.highestDepth ?? 1);
+                    save.lastLogin, m.upgrades, m.highestDepth);
                 if (earned > 0) this.registry.set('offlineGold', earned);
             }
         } else {
-            this.registry.set('gold', 150);
-            this.registry.set('upgrades', { attack: 1, health: 1, offlineRate: 1 });
-            this.registry.set('highestDepth', 1);
+            const m = migrateSave(null);
+            this.registry.set('gold', m.gold);
+            this.registry.set('upgrades', m.upgrades);
+            this.registry.set('highestDepth', m.highestDepth);
         }
         this.registry.set('initialized', true);
     }
 
-    private createUpgradeRow(x: number, y: number, label: string, upgradeKey: 'attack' | 'health' | 'offlineRate') {
-        const upgrades = this.registry.get('upgrades') as { attack: number; health: number; offlineRate: number };
+    private createUpgradeRow(x: number, y: number, label: string,
+        upgradeKey: 'attack' | 'health' | 'offlineRate' | 'attackSpeed' | 'critChance') {
+        const upgrades = this.registry.get('upgrades') as Record<string, number>;
         let currentLevel = upgrades[upgradeKey];
         let cost = upgradeCost(currentLevel);
 
