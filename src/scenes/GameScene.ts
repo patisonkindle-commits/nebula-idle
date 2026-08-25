@@ -246,24 +246,24 @@ export class GameScene extends Phaser.Scene {
             for (let gx = 1; gx <= COLS - 2; gx++) {
                 // GDD asset map: tan-dirt floor family (official Kenney sampleMap scheme)
                 const variant = ['tile_0048','tile_0050','tile_0051','tile_0052'][Phaser.Math.Between(0, 3)];
-                this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2, variant).setDepth(0));
+                this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2, variant).setScale(4).setDepth(0));
             }
         }
         // Walls: border with corners
         for (let gx = 0; gx < COLS; gx++) {
             for (const gy of [0, ROWS - 1]) {
                 this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2,
-                    (gx === 0 || gx === COLS - 1) ? 'tile_0010' : 'tile_0010').setDepth(1));
+                    (gx === 0 || gx === COLS - 1) ? 'tile_0010' : 'tile_0010').setScale(4).setDepth(1));
             }
         }
         for (let gy = 1; gy < ROWS - 1; gy++) {
             for (const gx of [0, COLS - 1]) {
-                this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2, 'tile_0010').setDepth(1));
+                this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2, 'tile_0010').setScale(4).setDepth(1));
             }
         }
 
         // Door at top center — closed while enemies live
-        this.doorTile = this.add.image(8 * TILE + TILE / 2, TILE / 2, 'tile_0034').setDepth(2);
+        this.doorTile = this.add.image(8 * TILE + TILE / 2, TILE / 2, 'tile_0034').setScale(4).setDepth(2);
 
         // Hero spawns bottom center (x: 8, y: 15)
         this.hero = new Hero(this, 8 * TILE + TILE / 2, 15 * TILE + TILE / 2, upgrades);
