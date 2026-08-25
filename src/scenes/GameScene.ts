@@ -129,16 +129,21 @@ class Hero extends GameEntity {
 class Enemy extends GameEntity {
     public goldDrop: number;
 
-    constructor(scene: Phaser.Scene, x: number, y: number, texKey: string, depthScale: number) {
+    constructor(scene: Phaser.Scene, x: number, y: number, texKey: string, depthScale: number,
+        kind: 'normal' | 'elite' | 'boss' = 'normal') {
         // GDD exponential scaling via logic.enemyStats (±15% HP variance)
         const st = enemyStats(depthScale);
+        const mult = kind === 'boss' ? { hp: 8, atk: 2.5, drop: 20 } : kind === 'elite' ? { hp: 3, atk: 1.6, drop: 5 } : { hp: 1, atk: 1, drop: 1 };
         super(scene, x, y, texKey, 0, {
-            maxHp: st.maxHp,
-            attackDamage: st.attackDamage,
-            attackSpeed: 1100
+            maxHp: Math.round(st.maxHp * mult.hp),
+            attackDamage: Math.round(st.attackDamage * mult.atk),
+            attackSpeed: kind === 'boss' ? 1400 : 1100
         });
-        this.goldDrop = st.goldDrop;
-        this.setScale(6).setDepth(10);
+        this.goldDrop = Math.round(st.goldDrop * mult.drop);
+        const scale = kind === 'boss' ? 10 : 6;
+        this.setScale(scale).setDepth(10);
+        if (kind === 'elite') this.setTint(0xffd700); // gold shimmer marks elites
+        if (kind === 'boss') this.setTint(0xff6b6b); // red-tinged boss
         this.hpBar.setDepth(11);
     }
 
@@ -204,6 +209,11 @@ export class GameScene extends Phaser.Scene {
         this.depthText = this.add.text(30, 24, `DEPTH ${this.depthNum}`, {
             font: '40px monospace', color: '#ffffff', fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(200);
+        if (this.depthNum % 5 === 0) {
+            this.add.text(30, 74, '☠ BOSS FLOOR', {
+                font: '34px monospace', color: '#ff6b6b', fontStyle: 'bold'
+            }).setScrollFactor(0).setDepth(200);
+        }
 
         this.buildRoom(upgrades);
 
@@ -276,13 +286,21 @@ export class GameScene extends Phaser.Scene {
 
         // Enemies: N in top half (y 2-8), count scales with depth
         // GDD asset map: slime/skeleton/goblin variety from character sheet rows 5-8
-        const count = enemyCount(this.depthNum);
-        for (let i = 0; i < count; i++) {
-            const ex = Phaser.Math.Between(2, COLS - 3) * TILE + TILE / 2;
-            const ey = Phaser.Math.Between(2, 8) * TILE + TILE / 2;
-            // GDD enemy variety: skeleton, rat, orange bat, teal bat, purple slime, brown grunt
-            const tex = Phaser.Math.RND.pick(['tile_0108','tile_0113','tile_0122','tile_0123','tile_0124']);
-            this.enemies.push(new Enemy(this, ex, ey, tex, this.depthNum));
+        const isBossRoom = this.depthNum % 5 === 0;
+        if (isBossRoom) {
+            // Boss floor every 5 depths — one big enemy, huge reward
+            this.enemies.push(new Enemy(this, 8 * TILE + TILE / 2, 4 * TILE + TILE / 2,
+                Phaser.Math.RND.pick(['tile_0122','tile_0124']), this.depthNum, 'boss'));
+        } else {
+            const count = enemyCount(this.depthNum);
+            for (let i = 0; i < count; i++) {
+                const ex = Phaser.Math.Between(2, COLS - 3) * TILE + TILE / 2;
+                const ey = Phaser.Math.Between(2, 8) * TILE + TILE / 2;
+                // GDD enemy variety + 10% elite chance
+                const tex = Phaser.Math.RND.pick(['tile_0108','tile_0113','tile_0122','tile_0123','tile_0124']);
+                const kind = Phaser.Math.RND.frac() < 0.1 ? 'elite' as const : 'normal' as const;
+                this.enemies.push(new Enemy(this, ex, ey, tex, this.depthNum, kind));
+            }
         }
 
         // Physics collision keeps everyone inside the room
