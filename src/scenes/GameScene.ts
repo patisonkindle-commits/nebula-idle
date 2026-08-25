@@ -72,7 +72,7 @@ class Hero extends GameEntity {
 
     constructor(scene: Phaser.Scene, x: number, y: number, stats: Upgrades) {
         const stats2 = heroStats(stats);
-        super(scene, x, y, 'characters', 0, stats2);
+        super(scene, x, y, 'characters', 99, stats2); // sword-knight hero (GDD asset map)
         this.critChance = stats2.critChance;
         this.setScale(4).setDepth(10).setAlpha(1);
         this.hpBar.setDepth(11);
@@ -244,7 +244,8 @@ export class GameScene extends Phaser.Scene {
         // Floors: x 1-15, y 1-16 randomized variants
         for (let gy = 1; gy <= ROWS - 2; gy++) {
             for (let gx = 1; gx <= COLS - 2; gx++) {
-                const variant = `tile_000${Phaser.Math.Between(0, 4)}`;
+                // GDD asset map: tan-dirt floor family (official Kenney sampleMap scheme)
+                const variant = ['tile_0048','tile_0050','tile_0051','tile_0052'][Phaser.Math.Between(0, 3)];
                 this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2, variant).setDepth(0));
             }
         }
@@ -252,12 +253,12 @@ export class GameScene extends Phaser.Scene {
         for (let gx = 0; gx < COLS; gx++) {
             for (const gy of [0, ROWS - 1]) {
                 this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2,
-                    (gx === 0 || gx === COLS - 1) ? 'tile_0016' : 'tile_0013').setDepth(1));
+                    (gx === 0 || gx === COLS - 1) ? 'tile_0010' : 'tile_0010').setDepth(1));
             }
         }
         for (let gy = 1; gy < ROWS - 1; gy++) {
             for (const gx of [0, COLS - 1]) {
-                this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2, 'tile_0016').setDepth(1));
+                this.tiles.push(this.add.image(gx * TILE + TILE / 2, gy * TILE + TILE / 2, 'tile_0010').setDepth(1));
             }
         }
 
@@ -273,7 +274,8 @@ export class GameScene extends Phaser.Scene {
         for (let i = 0; i < count; i++) {
             const ex = Phaser.Math.Between(2, COLS - 3) * TILE + TILE / 2;
             const ey = Phaser.Math.Between(2, 8) * TILE + TILE / 2;
-            const frame = Phaser.Math.RND.pick([68, 69, 70, 74, 75, 82, 96]);
+            // GDD enemy variety: skeleton, rat, orange bat, teal bat, purple slime, brown grunt
+            const frame = Phaser.Math.RND.pick([1, 6, 114, 118, 14, 108]);
             this.enemies.push(new Enemy(this, ex, ey, frame, this.depthNum));
         }
 

@@ -24,10 +24,11 @@ export class PreloadScene extends Phaser.Scene {
         });
 
         // 3. Kenney Tiny Dungeon tiles (individual 16x16 files)
+        // Floors = tan-dirt family 0048-0052 (per official sampleMap.tmx);
+        // Walls = dark blue-gray brick 0010; Doors = 0034 closed / 0035 open
         const requiredTiles = [
-            'tile_0000', 'tile_0001', 'tile_0002', 'tile_0003', 'tile_0004',
-            'tile_0013', 'tile_0016',
-            'tile_0034', 'tile_0035'
+            'tile_0010', 'tile_0034', 'tile_0035',
+            'tile_0048', 'tile_0050', 'tile_0051', 'tile_0052'
         ];
         requiredTiles.forEach(tile => this.load.image(tile, `assets/tiles/${tile}.png`));
 
